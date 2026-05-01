@@ -18,7 +18,8 @@ const resume_1 = __importDefault(require("./routes/resume"));
 const chat_1 = __importDefault(require("./routes/chat"));
 dotenv_1.default.config();
 const app = (0, express_1.default)();
-const PORT = process.env.PORT || 5000;
+// ✅ FIX: ensure PORT is always a number
+const PORT = Number(process.env.PORT) || 5000;
 // Security
 app.use((0, helmet_1.default)());
 // Rate limiters
@@ -33,14 +34,14 @@ const authLimiter = (0, express_rate_limit_1.default)({
     message: { message: 'Too many auth attempts, please wait a minute.' },
 });
 app.use(globalLimiter);
-// CORS (production safe)
+// CORS
 app.use((0, cors_1.default)({
     origin: true,
     credentials: true,
 }));
 app.use(express_1.default.json());
 app.use(express_1.default.urlencoded({ extended: true }));
-// ✅ ROOT ROUTE (VERY IMPORTANT for Railway)
+// Root route
 app.get('/', (_req, res) => {
     res.send('Server is running 🚀');
 });
@@ -69,8 +70,8 @@ app.use((err, _req, res, _next) => {
         ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
     });
 });
-// Start server
-app.listen(PORT, () => {
+// 🚀 START SERVER
+app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`🔒 Security: Helmet + Rate Limiting enabled`);
 });
