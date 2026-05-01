@@ -23,28 +23,27 @@ const PORT = process.env.PORT || 5000;
 app.use((0, helmet_1.default)());
 // Rate limiters
 const globalLimiter = (0, express_rate_limit_1.default)({
-    windowMs: 15 * 60 * 1000, // 15 min
+    windowMs: 15 * 60 * 1000,
     max: 1000,
     message: { message: 'Too many requests, please try again later.' },
 });
 const authLimiter = (0, express_rate_limit_1.default)({
-    windowMs: 60 * 1000, // 1 min
+    windowMs: 60 * 1000,
     max: 5,
     message: { message: 'Too many auth attempts, please wait a minute.' },
 });
 app.use(globalLimiter);
-// CORS
+// CORS (production safe)
 app.use((0, cors_1.default)({
-    origin: [
-        'http://localhost:5173',
-        'http://localhost:3000',
-        'http://localhost:3002',
-        process.env.FRONTEND_URL || 'http://localhost:5173',
-    ],
+    origin: true,
     credentials: true,
 }));
 app.use(express_1.default.json());
 app.use(express_1.default.urlencoded({ extended: true }));
+// ✅ ROOT ROUTE (VERY IMPORTANT for Railway)
+app.get('/', (_req, res) => {
+    res.send('Server is running 🚀');
+});
 // Routes
 app.use('/api/auth', authLimiter, auth_1.default);
 app.use('/api/profile', profile_1.default);
@@ -56,7 +55,11 @@ app.use('/api/resume', resume_1.default);
 app.use('/api/chat', chat_1.default);
 // Health check
 app.get('/api/health', (_req, res) => {
-    res.json({ status: 'ok', message: 'CareerNavigator API is running', timestamp: new Date().toISOString() });
+    res.json({
+        status: 'ok',
+        message: 'CareerNavigator API is running',
+        timestamp: new Date().toISOString()
+    });
 });
 // Error handling
 app.use((err, _req, res, _next) => {
@@ -66,6 +69,7 @@ app.use((err, _req, res, _next) => {
         ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
     });
 });
+// Start server
 app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`🔒 Security: Helmet + Rate Limiting enabled`);
