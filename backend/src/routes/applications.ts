@@ -30,10 +30,10 @@ router.get('/stats', authMiddleware, async (req: AuthRequest, res) => {
 
     const stats = {
       total: apps?.length || 0,
-      applied: apps?.filter(a => a.status === 'applied').length || 0,
-      interviews: apps?.filter(a => ['interview_scheduled', 'technical', 'hr_round'].includes(a.status)).length || 0,
-      offers: apps?.filter(a => a.status === 'offer').length || 0,
-      rejected: apps?.filter(a => a.status === 'rejected').length || 0,
+      applied: apps?.filter((a: any) => a.status === 'applied').length || 0,
+      interviews: apps?.filter((a: any) => ['interview_scheduled', 'technical', 'hr_round'].includes(a.status)).length || 0,
+      offers: apps?.filter((a: any) => a.status === 'offer').length || 0,
+      rejected: apps?.filter((a: any) => a.status === 'rejected').length || 0,
     }
 
     res.json(stats)

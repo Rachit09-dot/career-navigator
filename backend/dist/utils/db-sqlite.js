@@ -28,6 +28,7 @@ const initDb = async () => {
       email TEXT UNIQUE NOT NULL,
       password TEXT NOT NULL,
       profile_complete INTEGER DEFAULT 0,
+      onboarding_completed INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
@@ -38,13 +39,25 @@ const initDb = async () => {
       phone TEXT,
       location TEXT,
       bio TEXT,
+      college TEXT,
+      degree TEXT,
+      current_year TEXT,
+      field_of_study TEXT,
       skills TEXT,
+      completed_skills TEXT,
       experience TEXT,
       education TEXT,
+      certifications TEXT,
       resume_url TEXT,
       linkedin_url TEXT,
       github_url TEXT,
       portfolio_url TEXT,
+      career_goal TEXT,
+      career_dna TEXT,
+      career_dna_last_run DATETIME,
+      skill_gap_last_run DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )
   `);
@@ -58,6 +71,9 @@ const initDb = async () => {
       description TEXT NOT NULL,
       requirements TEXT NOT NULL,
       salary_range TEXT,
+      field TEXT,
+      source TEXT DEFAULT 'manual',
+      external_url TEXT,
       posted_date DATETIME DEFAULT CURRENT_TIMESTAMP,
       status TEXT DEFAULT 'active'
     )
@@ -66,12 +82,17 @@ const initDb = async () => {
     CREATE TABLE IF NOT EXISTS applications (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
-      status TEXT DEFAULT 'pending',
-      job_id INTEGER NOT NULL,
-      cover_letter TEXT,
+      job_id INTEGER,
+      job_title TEXT,
+      company TEXT,
+      job_url TEXT,
+      status TEXT DEFAULT 'applied',
       applied_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-      FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE
+      notes TEXT,
+      salary_offered TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )
   `);
     db.run(`
@@ -84,9 +105,45 @@ const initDb = async () => {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )
   `);
+    db.run(`
+    CREATE TABLE IF NOT EXISTS skill_gaps (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      target_role TEXT,
+      completed_skills TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+    // Safely add missing columns if upgrading an existing database file
+    const addCol = (table, col, type) => {
+        try {
+            db.run(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`);
+        }
+        catch { }
+    };
+    addCol('users', 'onboarding_completed', 'INTEGER DEFAULT 0');
+    addCol('profiles', 'college', 'TEXT');
+    addCol('profiles', 'degree', 'TEXT');
+    addCol('profiles', 'current_year', 'TEXT');
+    addCol('profiles', 'field_of_study', 'TEXT');
+    addCol('profiles', 'completed_skills', 'TEXT');
+    addCol('profiles', 'certifications', 'TEXT');
+    addCol('profiles', 'career_goal', 'TEXT');
+    addCol('profiles', 'career_dna', 'TEXT');
+    addCol('profiles', 'career_dna_last_run', 'DATETIME');
+    addCol('profiles', 'skill_gap_last_run', 'DATETIME');
+    addCol('jobs', 'field', 'TEXT');
+    addCol('jobs', 'source', "TEXT DEFAULT 'manual'");
+    addCol('jobs', 'external_url', 'TEXT');
+    addCol('applications', 'job_title', 'TEXT');
+    addCol('applications', 'company', 'TEXT');
+    addCol('applications', 'job_url', 'TEXT');
+    addCol('applications', 'notes', 'TEXT');
+    addCol('applications', 'salary_offered', 'TEXT');
     // Save database to file
     saveDb();
-    console.log('✅ SQLite database initialized');
+    console.log('✅ SQLite database initialized with full schema');
     return db;
 };
 // Save database to file
@@ -99,7 +156,7 @@ const saveDb = () => {
 };
 // Convert PostgreSQL $1, $2... to SQLite ?
 const convertQuery = (text) => {
-    return text.replace(/\$\d+/g, '?');
+    return text.replace(/\$\d+/g, () => '?');
 };
 // Query function compatible with PostgreSQL-style queries
 const query = async (text, params) => {
@@ -125,22 +182,20 @@ const query = async (text, params) => {
             const [mainQuery] = text.split(/RETURNING/i);
             const sqliteMainQuery = convertQuery(mainQuery);
             db.run(sqliteMainQuery, params);
-            saveDb();
-            // Get the last inserted row
-            const lastIdStmt = db.prepare('SELECT last_insert_rowid() as id');
-            lastIdStmt.step();
-            const lastId = lastIdStmt.getAsObject().id;
-            lastIdStmt.free();
+            // Get the last inserted row ID
+            const lastIdRes = db.exec('SELECT last_insert_rowid() as id');
+            const lastId = lastIdRes[0]?.values[0]?.[0];
             // Get the inserted row data
             const tableName = mainQuery.match(/(?:INTO|UPDATE)\s+(\w+)/i)?.[1];
             const returningFields = text.split(/RETURNING/i)[1].trim();
-            const selectStmt = db.prepare(`SELECT ${returningFields} FROM ${tableName} WHERE id = ?`);
-            selectStmt.bind([lastId]);
+            const selectQuery = `SELECT ${returningFields} FROM ${tableName} WHERE id = ${Number(lastId)}`;
+            const selectStmt = db.prepare(selectQuery);
             const rows = [];
             while (selectStmt.step()) {
                 rows.push(selectStmt.getAsObject());
             }
             selectStmt.free();
+            saveDb();
             return { rows, rowCount: rows.length };
         }
         else {
