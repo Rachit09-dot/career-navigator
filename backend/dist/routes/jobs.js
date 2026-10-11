@@ -29,6 +29,10 @@ async function fetchJSearchJobs(query, location = 'India') {
             'X-RapidAPI-Host': 'jsearch.p.rapidapi.com',
         },
     });
+    if (res.status === 403) {
+        // 403 = not subscribed to this RapidAPI plan — skip silently, use Adzuna
+        throw Object.assign(new Error(`JSearch HTTP 403 — not subscribed`), { skipRetry: true });
+    }
     if (!res.ok)
         throw new Error(`JSearch HTTP ${res.status}`);
     const data = await res.json();
@@ -216,7 +220,12 @@ router.get('/', auth_1.authMiddleware, async (req, res) => {
                 }
             }
             catch (jsErr) {
-                console.error('JSearch error, falling back to Adzuna:', jsErr);
+                if (jsErr?.skipRetry) {
+                    console.log('JSearch skipped (not subscribed) — using Adzuna');
+                }
+                else {
+                    console.error('JSearch error, falling back to Adzuna:', jsErr?.message || jsErr);
+                }
             }
         }
         // Try Adzuna

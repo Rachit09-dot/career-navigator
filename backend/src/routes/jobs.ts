@@ -27,6 +27,10 @@ async function fetchJSearchJobs(query: string, location = 'India'): Promise<any[
       'X-RapidAPI-Host': 'jsearch.p.rapidapi.com',
     },
   })
+  if (res.status === 403) {
+    // 403 = not subscribed to this RapidAPI plan — skip silently, use Adzuna
+    throw Object.assign(new Error(`JSearch HTTP 403 — not subscribed`), { skipRetry: true })
+  }
   if (!res.ok) throw new Error(`JSearch HTTP ${res.status}`)
   const data: any = await res.json()
   return (data?.data || []).map(transformJSearchJob)
@@ -192,8 +196,12 @@ router.get('/', authMiddleware, async (req: AuthRequest, res) => {
           const sortedJobs = processJobs(jobs)
           return res.json({ jobs: sortedJobs, total: sortedJobs.length, source: 'jsearch' })
         }
-      } catch (jsErr) {
-        console.error('JSearch error, falling back to Adzuna:', jsErr)
+      } catch (jsErr: any) {
+        if (jsErr?.skipRetry) {
+          console.log('JSearch skipped (not subscribed) — using Adzuna')
+        } else {
+          console.error('JSearch error, falling back to Adzuna:', jsErr?.message || jsErr)
+        }
       }
     }
 
