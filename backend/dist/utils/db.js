@@ -12,6 +12,7 @@ const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const isValidSupabaseUrl = supabaseUrl.startsWith('https://') &&
     supabaseUrl.includes('.supabase.co') &&
+    !supabaseUrl.includes('xxmhlvkqhlmcxqeyvzld') &&
     !supabaseUrl.includes('example') &&
     !supabaseUrl.includes('your-project');
 let realSupabase = null;

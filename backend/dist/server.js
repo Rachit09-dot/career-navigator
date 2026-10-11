@@ -20,6 +20,7 @@ dotenv_1.default.config();
 const app = (0, express_1.default)();
 // ✅ FIX: ensure PORT is always a number
 const PORT = Number(process.env.PORT) || 5000;
+app.set('trust proxy', 1); // Required for Render/Railway
 // ✅ FIX: Trust proxy for Render/Railway/Vercel deployments
 // Required for express-rate-limit to work correctly behind reverse proxies
 app.set('trust proxy', 1);
