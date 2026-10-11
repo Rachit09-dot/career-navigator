@@ -57,7 +57,7 @@ function ResumePreview({ d }: { d: ResumeData }) {
   const courses = d.coursework.split(',').map(s => s.trim()).filter(Boolean);
 
   const sectionHeader = (title: string) => (
-    <div style={{ marginTop: 8, marginBottom: 4 }}>
+    <div style={{ marginTop: 6, marginBottom: 3 }}>
       <div style={{ fontSize: 11, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '1px solid #000', paddingBottom: 1, lineHeight: 1.2 }}>
         {title}
       </div>
@@ -65,7 +65,7 @@ function ResumePreview({ d }: { d: ResumeData }) {
   );
 
   return (
-    <div style={{ width: 794, background: '#fff', color: '#000', fontFamily: '"Times New Roman", Times, serif', fontSize: 10.5, lineHeight: 1.2, padding: '38px 48px', boxSizing: 'border-box' }}>
+    <div style={{ width: 794, minHeight: 1123, background: '#fff', color: '#000', fontFamily: '"Times New Roman", Times, serif', fontSize: 10.5, lineHeight: 1.2, padding: '32px 46px 32px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
       <div style={{ textAlign: 'center', marginBottom: 6 }}>
         <div style={{ fontSize: 24, fontWeight: 'bold', letterSpacing: 1, marginBottom: 2 }}>{d.name || 'Your Name'}</div>
         <div style={{ fontSize: 9.5, display: 'flex', justifyContent: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -212,7 +212,15 @@ export default function ResumeBuilder() {
     if (!el) return;
     const win = window.open('', '_blank');
     if (!win) return;
-    win.document.write(`<!DOCTYPE html><html><head><title>${data.name || 'Resume'}</title><style>*{margin:0;padding:0;box-sizing:border-box;}body{background:white;}@page{size:A4;margin:0;}@media print{body{-webkit-print-color-adjust:exact;}}</style></head><body>${el.outerHTML}</body></html>`);
+    win.document.write(`<!DOCTYPE html><html><head><title>${data.name || 'Resume'}</title><style>
+      *{margin:0;padding:0;box-sizing:border-box;}
+      body{background:white;width:794px;}
+      @page{size:A4;margin:0;}
+      @media print{
+        html,body{width:794px;height:1123px;overflow:hidden;}
+        body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+      }
+    </style></head><body>${el.outerHTML}</body></html>`);
     win.document.close();
     setTimeout(() => { win.focus(); win.print(); }, 400);
   };
