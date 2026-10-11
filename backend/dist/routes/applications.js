@@ -32,10 +32,10 @@ router.get('/stats', auth_1.authMiddleware, async (req, res) => {
             .eq('user_id', req.userId);
         const stats = {
             total: apps?.length || 0,
-            applied: apps?.filter(a => a.status === 'applied').length || 0,
-            interviews: apps?.filter(a => ['interview_scheduled', 'technical', 'hr_round'].includes(a.status)).length || 0,
-            offers: apps?.filter(a => a.status === 'offer').length || 0,
-            rejected: apps?.filter(a => a.status === 'rejected').length || 0,
+            applied: apps?.filter((a) => a.status === 'applied').length || 0,
+            interviews: apps?.filter((a) => ['interview_scheduled', 'technical', 'hr_round'].includes(a.status)).length || 0,
+            offers: apps?.filter((a) => a.status === 'offer').length || 0,
+            rejected: apps?.filter((a) => a.status === 'rejected').length || 0,
         };
         res.json(stats);
     }

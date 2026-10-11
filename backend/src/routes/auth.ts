@@ -16,11 +16,15 @@ router.post('/register', async (req, res) => {
     }
 
     // Check if user exists
-    const { data: existing } = await supabase
+    const { data: existing, error: checkError } = await supabase
       .from('users')
       .select('id')
       .eq('email', email)
-      .single()
+      .maybeSingle()
+
+    if (checkError) {
+      console.warn('Check user warning:', checkError)
+    }
 
     if (existing) {
       return res.status(400).json({ message: 'User already exists' })
@@ -37,21 +41,26 @@ router.post('/register', async (req, res) => {
       .single()
 
     if (error || !user) {
-      throw error || new Error('Failed to create user')
+      console.error('Create user error:', error)
+      const errStr = String(error?.message || error || '').toLowerCase()
+      if (errStr.includes('unique') || errStr.includes('duplicate') || errStr.includes('already exists')) {
+        return res.status(400).json({ message: 'User already exists' })
+      }
+      return res.status(500).json({ message: error?.message || 'Failed to create user' })
     }
 
     // Create empty profile
     await supabase.from('profiles').insert({ user_id: user.id })
 
-    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET!, { expiresIn: '7d' })
+    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET || 'careernavigator_secret_key_2024', { expiresIn: '7d' })
 
     res.status(201).json({
       user: { id: user.id, name: user.name, email: user.email, profileComplete: false },
       token,
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Register error:', error)
-    res.status(500).json({ message: 'Registration failed' })
+    res.status(500).json({ message: error?.message || 'Registration failed' })
   }
 })
 
@@ -60,13 +69,17 @@ router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body
 
-    const { data: user } = await supabase
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email and password required' })
+    }
+
+    const { data: user, error } = await supabase
       .from('users')
       .select('*')
       .eq('email', email)
-      .single()
+      .maybeSingle()
 
-    if (!user) {
+    if (error || !user) {
       return res.status(401).json({ message: 'Invalid credentials' })
     }
 
@@ -75,14 +88,14 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ message: 'Invalid credentials' })
     }
 
-    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET!, { expiresIn: '7d' })
+    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET || 'careernavigator_secret_key_2024', { expiresIn: '7d' })
 
     // Check if profile has been filled (onboarding done)
     const { data: profile } = await supabase
       .from('profiles')
       .select('college, career_goal, field_of_study')
       .eq('user_id', user.id)
-      .single()
+      .maybeSingle()
 
     const profileComplete = !!(profile?.college || profile?.career_goal || profile?.field_of_study)
 
@@ -90,9 +103,9 @@ router.post('/login', async (req, res) => {
       user: { id: user.id, name: user.name, email: user.email, profileComplete },
       token,
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Login error:', error)
-    res.status(500).json({ message: 'Login failed' })
+    res.status(500).json({ message: error?.message || 'Login failed' })
   }
 })
 
@@ -103,13 +116,13 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res) => {
       .from('users')
       .select('id, name, email, profile_complete')
       .eq('id', req.userId)
-      .single()
+      .maybeSingle()
 
     if (!user) return res.status(404).json({ message: 'User not found' })
 
     res.json(user)
-  } catch (error) {
-    res.status(500).json({ message: 'Failed to get user' })
+  } catch (error: any) {
+    res.status(500).json({ message: error?.message || 'Failed to get user' })
   }
 })
 
