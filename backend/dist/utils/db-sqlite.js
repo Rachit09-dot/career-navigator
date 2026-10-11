@@ -9,19 +9,25 @@ const sql_js_1 = __importDefault(require("sql.js"));
 const fs_1 = __importDefault(require("fs"));
 let db = null;
 const dbPath = process.env.DATABASE_PATH || './database.sqlite';
+let initPromise = null;
 // Initialize database
 const initDb = async () => {
-    const SQL = await (0, sql_js_1.default)();
-    // Load existing database or create new one
-    if (fs_1.default.existsSync(dbPath)) {
-        const buffer = fs_1.default.readFileSync(dbPath);
-        db = new SQL.Database(buffer);
-    }
-    else {
-        db = new SQL.Database();
-    }
-    // Initialize schema
-    db.run(`
+    if (db)
+        return db;
+    if (initPromise)
+        return initPromise;
+    initPromise = (async () => {
+        const SQL = await (0, sql_js_1.default)();
+        // Load existing database or create new one
+        if (fs_1.default.existsSync(dbPath)) {
+            const buffer = fs_1.default.readFileSync(dbPath);
+            db = new SQL.Database(buffer);
+        }
+        else {
+            db = new SQL.Database();
+        }
+        // Initialize schema
+        db.run(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -31,7 +37,7 @@ const initDb = async () => {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
-    db.run(`
+        db.run(`
     CREATE TABLE IF NOT EXISTS profiles (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER UNIQUE NOT NULL,
@@ -59,27 +65,27 @@ const initDb = async () => {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )
   `);
-    // Add missing columns to existing profiles table (migration)
-    const profileMigrations = [
-        'ALTER TABLE profiles ADD COLUMN college TEXT',
-        'ALTER TABLE profiles ADD COLUMN degree TEXT',
-        'ALTER TABLE profiles ADD COLUMN current_year TEXT',
-        'ALTER TABLE profiles ADD COLUMN field_of_study TEXT',
-        'ALTER TABLE profiles ADD COLUMN completed_skills TEXT',
-        'ALTER TABLE profiles ADD COLUMN certifications TEXT',
-        'ALTER TABLE profiles ADD COLUMN career_goal TEXT',
-        'ALTER TABLE profiles ADD COLUMN career_dna TEXT',
-        'ALTER TABLE profiles ADD COLUMN career_dna_last_run DATETIME',
-        'ALTER TABLE profiles ADD COLUMN skill_gap_last_run DATETIME',
-        'ALTER TABLE profiles ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP',
-    ];
-    for (const migration of profileMigrations) {
-        try {
-            db.run(migration);
+        // Add missing columns to existing profiles table (migration)
+        const profileMigrations = [
+            'ALTER TABLE profiles ADD COLUMN college TEXT',
+            'ALTER TABLE profiles ADD COLUMN degree TEXT',
+            'ALTER TABLE profiles ADD COLUMN current_year TEXT',
+            'ALTER TABLE profiles ADD COLUMN field_of_study TEXT',
+            'ALTER TABLE profiles ADD COLUMN completed_skills TEXT',
+            'ALTER TABLE profiles ADD COLUMN certifications TEXT',
+            'ALTER TABLE profiles ADD COLUMN career_goal TEXT',
+            'ALTER TABLE profiles ADD COLUMN career_dna TEXT',
+            'ALTER TABLE profiles ADD COLUMN career_dna_last_run DATETIME',
+            'ALTER TABLE profiles ADD COLUMN skill_gap_last_run DATETIME',
+            'ALTER TABLE profiles ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP',
+        ];
+        for (const migration of profileMigrations) {
+            try {
+                db.run(migration);
+            }
+            catch (_) { /* column already exists */ }
         }
-        catch (_) { /* column already exists */ }
-    }
-    db.run(`
+        db.run(`
     CREATE TABLE IF NOT EXISTS jobs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       title TEXT NOT NULL,
@@ -93,7 +99,7 @@ const initDb = async () => {
       status TEXT DEFAULT 'active'
     )
   `);
-    db.run(`
+        db.run(`
     CREATE TABLE IF NOT EXISTS applications (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
@@ -109,24 +115,24 @@ const initDb = async () => {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )
   `);
-    // Add missing columns to existing applications table (migration)
-    const appMigrations = [
-        'ALTER TABLE applications ADD COLUMN job_title TEXT',
-        'ALTER TABLE applications ADD COLUMN company TEXT',
-        'ALTER TABLE applications ADD COLUMN job_url TEXT',
-        'ALTER TABLE applications ADD COLUMN notes TEXT',
-        'ALTER TABLE applications ADD COLUMN salary_offered TEXT',
-        'ALTER TABLE applications ADD COLUMN applied_date TEXT',
-        'ALTER TABLE applications ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP',
-        'ALTER TABLE applications ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP',
-    ];
-    for (const migration of appMigrations) {
-        try {
-            db.run(migration);
+        // Add missing columns to existing applications table (migration)
+        const appMigrations = [
+            'ALTER TABLE applications ADD COLUMN job_title TEXT',
+            'ALTER TABLE applications ADD COLUMN company TEXT',
+            'ALTER TABLE applications ADD COLUMN job_url TEXT',
+            'ALTER TABLE applications ADD COLUMN notes TEXT',
+            'ALTER TABLE applications ADD COLUMN salary_offered TEXT',
+            'ALTER TABLE applications ADD COLUMN applied_date TEXT',
+            'ALTER TABLE applications ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP',
+            'ALTER TABLE applications ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP',
+        ];
+        for (const migration of appMigrations) {
+            try {
+                db.run(migration);
+            }
+            catch (_) { /* column already exists */ }
         }
-        catch (_) { /* column already exists */ }
-    }
-    db.run(`
+        db.run(`
     CREATE TABLE IF NOT EXISTS career_assessments (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
@@ -136,8 +142,8 @@ const initDb = async () => {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )
   `);
-    // Add skill_gaps table
-    db.run(`
+        // Add skill_gaps table
+        db.run(`
     CREATE TABLE IF NOT EXISTS skill_gaps (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
@@ -148,10 +154,12 @@ const initDb = async () => {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )
   `);
-    // Save database to file
-    saveDb();
-    console.log('✅ SQLite database initialized with full schema');
-    return db;
+        // Save database to file
+        saveDb();
+        console.log('✅ SQLite database initialized with full schema');
+        return db;
+    })();
+    return initPromise;
 };
 // Save database to file
 const saveDb = () => {
@@ -170,12 +178,14 @@ const query = async (text, params) => {
     if (!db) {
         await initDb();
     }
+    // Ensure no undefined values are bound to SQLite
+    const safeParams = (params || []).map(p => (p === undefined ? null : p));
     const sqliteQuery = convertQuery(text);
     try {
         if (text.trim().toUpperCase().startsWith('SELECT')) {
             const stmt = db.prepare(sqliteQuery);
-            if (params && params.length > 0) {
-                stmt.bind(params);
+            if (safeParams.length > 0) {
+                stmt.bind(safeParams);
             }
             const rows = [];
             while (stmt.step()) {
@@ -188,27 +198,46 @@ const query = async (text, params) => {
             // Handle INSERT/UPDATE with RETURNING
             const [mainQuery] = text.split(/RETURNING/i);
             const sqliteMainQuery = convertQuery(mainQuery);
-            db.run(sqliteMainQuery, params);
+            db.run(sqliteMainQuery, safeParams);
             saveDb();
-            // Get the last inserted row
-            const lastIdStmt = db.prepare('SELECT last_insert_rowid() as id');
-            lastIdStmt.step();
-            const lastId = lastIdStmt.getAsObject().id;
-            lastIdStmt.free();
-            // Get the inserted row data
             const tableName = mainQuery.match(/(?:INTO|UPDATE)\s+(\w+)/i)?.[1];
             const returningFields = text.split(/RETURNING/i)[1].trim();
-            const selectStmt = db.prepare(`SELECT ${returningFields} FROM ${tableName} WHERE id = ?`);
-            selectStmt.bind([lastId]);
-            const rows = [];
-            while (selectStmt.step()) {
-                rows.push(selectStmt.getAsObject());
+            let rows = [];
+            if (text.trim().toUpperCase().startsWith('INSERT')) {
+                // For INSERT: use db.exec to reliably get last_insert_rowid in sql.js
+                const lastIdResult = db.exec('SELECT last_insert_rowid() as id');
+                const lastId = lastIdResult[0]?.values[0]?.[0];
+                if (lastId !== undefined && lastId !== null && Number(lastId) > 0) {
+                    const selectStmt = db.prepare(`SELECT ${returningFields} FROM ${tableName} WHERE id = ?`);
+                    selectStmt.bind([lastId]);
+                    while (selectStmt.step()) {
+                        rows.push(selectStmt.getAsObject());
+                    }
+                    selectStmt.free();
+                }
             }
-            selectStmt.free();
+            else {
+                // For UPDATE: re-select using WHERE conditions from original query
+                const whereMatch = mainQuery.match(/WHERE\s+(.+)$/i);
+                if (whereMatch) {
+                    // Count ? placeholders before WHERE in the converted query (reliable vs regex on original SQL)
+                    const sqliteBeforeWhere = sqliteMainQuery.split(/\s+WHERE\s+/i)[0];
+                    const setCount = (sqliteBeforeWhere.match(/\?/g) || []).length;
+                    const whereParams = safeParams.slice(setCount);
+                    const sqliteWhereQuery = convertQuery(`SELECT ${returningFields} FROM ${tableName} WHERE ${whereMatch[1].trim()}`);
+                    const selectStmt = db.prepare(sqliteWhereQuery);
+                    if (whereParams.length > 0)
+                        selectStmt.bind(whereParams);
+                    while (selectStmt.step()) {
+                        rows.push(selectStmt.getAsObject());
+                    }
+                    selectStmt.free();
+                }
+            }
             return { rows, rowCount: rows.length };
         }
         else {
-            db.run(sqliteQuery, params);
+            db.run(sqliteQuery, safeParams);
             saveDb();
             return { rows: [], rowCount: db.getRowsModified() };
         }

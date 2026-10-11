@@ -5,17 +5,23 @@ import fs from 'fs'
 let db: Database | null = null
 const dbPath = process.env.DATABASE_PATH || './database.sqlite'
 
+let initPromise: Promise<Database> | null = null
+
 // Initialize database
-const initDb = async () => {
-  const SQL = await initSqlJs()
-  
-  // Load existing database or create new one
-  if (fs.existsSync(dbPath)) {
-    const buffer = fs.readFileSync(dbPath)
-    db = new SQL.Database(buffer)
-  } else {
-    db = new SQL.Database()
-  }
+const initDb = async (): Promise<Database> => {
+  if (db) return db
+  if (initPromise) return initPromise
+
+  initPromise = (async () => {
+    const SQL = await initSqlJs()
+    
+    // Load existing database or create new one
+    if (fs.existsSync(dbPath)) {
+      const buffer = fs.readFileSync(dbPath)
+      db = new SQL.Database(buffer)
+    } else {
+      db = new SQL.Database()
+    }
 
   // Initialize schema
   db.run(`
@@ -147,11 +153,14 @@ const initDb = async () => {
     )
   `)
 
-  // Save database to file
-  saveDb()
-  console.log('✅ SQLite database initialized with full schema')
-  
-  return db
+    // Save database to file
+    saveDb()
+    console.log('✅ SQLite database initialized with full schema')
+    
+    return db!
+  })()
+
+  return initPromise
 }
 
 // Save database to file
@@ -174,13 +183,15 @@ export const query = async (text: string, params?: any[]) => {
     await initDb()
   }
 
+  // Ensure no undefined values are bound to SQLite
+  const safeParams = (params || []).map(p => (p === undefined ? null : p))
   const sqliteQuery = convertQuery(text)
   
   try {
     if (text.trim().toUpperCase().startsWith('SELECT')) {
       const stmt = db!.prepare(sqliteQuery)
-      if (params && params.length > 0) {
-        stmt.bind(params)
+      if (safeParams.length > 0) {
+        stmt.bind(safeParams)
       }
       const rows: any[] = []
       while (stmt.step()) {
@@ -193,29 +204,44 @@ export const query = async (text: string, params?: any[]) => {
       const [mainQuery] = text.split(/RETURNING/i)
       const sqliteMainQuery = convertQuery(mainQuery)
       
-      db!.run(sqliteMainQuery, params)
+      db!.run(sqliteMainQuery, safeParams)
       saveDb()
       
-      // Get the last inserted row
-      const lastIdStmt = db!.prepare('SELECT last_insert_rowid() as id')
-      lastIdStmt.step()
-      const lastId = lastIdStmt.getAsObject().id
-      lastIdStmt.free()
-      
-      // Get the inserted row data
       const tableName = mainQuery.match(/(?:INTO|UPDATE)\s+(\w+)/i)?.[1]
       const returningFields = text.split(/RETURNING/i)[1].trim()
-      const selectStmt = db!.prepare(`SELECT ${returningFields} FROM ${tableName} WHERE id = ?`)
-      selectStmt.bind([lastId])
-      const rows: any[] = []
-      while (selectStmt.step()) {
-        rows.push(selectStmt.getAsObject())
+      let rows: any[] = []
+
+      if (text.trim().toUpperCase().startsWith('INSERT')) {
+        // For INSERT: use db.exec to reliably get last_insert_rowid in sql.js
+        const lastIdResult = db!.exec('SELECT last_insert_rowid() as id')
+        const lastId = lastIdResult[0]?.values[0]?.[0]
+        if (lastId !== undefined && lastId !== null && Number(lastId) > 0) {
+          const selectStmt = db!.prepare(`SELECT ${returningFields} FROM ${tableName} WHERE id = ?`)
+          selectStmt.bind([lastId])
+          while (selectStmt.step()) { rows.push(selectStmt.getAsObject()) }
+          selectStmt.free()
+        }
+      } else {
+        // For UPDATE: re-select using WHERE conditions from original query
+        const whereMatch = mainQuery.match(/WHERE\s+(.+)$/i)
+        if (whereMatch) {
+          // Count ? placeholders before WHERE in the converted query (reliable vs regex on original SQL)
+          const sqliteBeforeWhere = sqliteMainQuery.split(/\s+WHERE\s+/i)[0]
+          const setCount = (sqliteBeforeWhere.match(/\?/g) || []).length
+          const whereParams = safeParams.slice(setCount)
+          const sqliteWhereQuery = convertQuery(
+            `SELECT ${returningFields} FROM ${tableName} WHERE ${whereMatch[1].trim()}`
+          )
+          const selectStmt = db!.prepare(sqliteWhereQuery)
+          if (whereParams.length > 0) selectStmt.bind(whereParams)
+          while (selectStmt.step()) { rows.push(selectStmt.getAsObject()) }
+          selectStmt.free()
+        }
       }
-      selectStmt.free()
-      
+
       return { rows, rowCount: rows.length }
     } else {
-      db!.run(sqliteQuery, params)
+      db!.run(sqliteQuery, safeParams)
       saveDb()
       return { rows: [], rowCount: db!.getRowsModified() }
     }
