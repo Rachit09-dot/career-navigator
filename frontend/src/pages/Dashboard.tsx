@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { applicationAPI, profileAPI, jobAPI, skillGapAPI } from '../services/api';
+import { calculateProfileCompletion, incompleteSections } from '../utils/profileCompletion';
 import { useTheme } from '../context/ThemeContext';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -78,13 +79,8 @@ export default function Dashboard() {
           setSkillProgress({ completed: completedSkills, total: totalSkills });
         } catch { /* silent */ }        const p = prof.data;
         setProfile(p);
-        const fields = [p.phone, p.location, p.bio, p.skills, p.experience, p.education, p.name, p.email];
-        const filled = fields.filter(f => {
-          if (!f) return false;
-          if (Array.isArray(f)) return f.length > 0;
-          return String(f).trim() !== '';
-        }).length;
-        const completion = Math.round((filled / fields.length) * 100);
+        // Use shared completion util — same logic as backend and Profile page
+        const completion = calculateProfileCompletion(p);
         let skillsCount = 0;
         if (Array.isArray(p.skills)) skillsCount = p.skills.length;
         else if (typeof p.skills === 'string' && p.skills) skillsCount = p.skills.split(',').filter((s: string) => s.trim()).length;
@@ -213,7 +209,7 @@ export default function Dashboard() {
               <div>
                 <p style={{ color: theme === 'dark' ? 'rgba(167,139,250,0.7)' : '#7c3aed', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Profile</p>
                 <p style={{ fontSize: 28, fontWeight: 900, color: ringColor === '#16a34a' ? '#4ade80' : ringColor === '#d97706' ? '#fbbf24' : (theme === 'dark' ? '#a78bfa' : '#7c3aed'), fontFamily: "'Plus Jakarta Sans', sans-serif", margin: 0 }}>{pct}%</p>
-                <p style={{ color: theme === 'dark' ? 'rgba(148,163,184,0.6)' : '#64748b', fontSize: 11, marginTop: 2 }}>{Math.round((1 - pct / 100) * 8)} sections left</p>
+                <p style={{ color: theme === 'dark' ? 'rgba(148,163,184,0.6)' : '#64748b', fontSize: 11, marginTop: 2 }}>{profile ? incompleteSections(profile) : 6} sections left</p>
               </div>
               <ProgressRing pct={pct} size={64} stroke={6} color={ringColor === '#16a34a' ? '#4ade80' : ringColor === '#d97706' ? '#fbbf24' : (theme === 'dark' ? '#a78bfa' : '#7c3aed')} />
             </div>

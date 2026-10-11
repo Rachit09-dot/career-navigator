@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { profileAPI } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import { useTheme } from '../context/ThemeContext'
+import { calculateProfileCompletion } from '../utils/profileCompletion';
 
 export default function Profile() {
   const { theme } = useTheme();
@@ -11,6 +12,7 @@ export default function Profile() {
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savedProfile, setSavedProfile] = useState<any>(null); // raw backend profile for completion calc
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -34,6 +36,7 @@ export default function Profile() {
       try {
         const res = await profileAPI.getProfile();
         const p = res.data;
+        setSavedProfile(p); // store raw for completion calc
         setFormData({
           name: p.name || user?.name || '',
           email: p.email || user?.email || '',
@@ -67,35 +70,39 @@ export default function Profile() {
     e.preventDefault();
     setSaving(true);
     try {
-      // Map frontend field names to backend field names
+      const {
+        linkedin,
+        github,
+        portfolio,
+        achievements,
+        languages,
+        email,
+        ...rest
+      } = formData;
+
       const payload = {
-        ...formData,
-        linkedin_url: formData.linkedin,
-        github_url: formData.github,
-        portfolio_url: formData.portfolio,
-        // Remove fields not supported by backend
-        linkedin: undefined,
-        github: undefined,
-        portfolio: undefined,
-        achievements: undefined,
-        languages: undefined,
+        ...rest,
+        linkedin_url: linkedin || '',
+        github_url: github || '',
+        portfolio_url: portfolio || '',
       };
-      
-      await profileAPI.updateProfile(payload);
+
+      const result = await profileAPI.updateProfile(payload);
+      // Update savedProfile with fresh backend data so completion recalculates correctly
+      if (result?.data) setSavedProfile(result.data);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
-    } catch {
-      alert('Failed to save profile. Make sure backend is running.');
+    } catch (err: any) {
+      console.error('Save profile error:', err);
+      const msg = err.response?.data?.message || 'Failed to save profile. Make sure backend is running.';
+      alert(msg);
     } finally {
       setSaving(false);
     }
   };
 
-  const calculateCompletion = () => {
-    const fields = Object.values(formData);
-    const filled = fields.filter(f => f && String(f).trim() !== '').length;
-    return Math.round((filled / fields.length) * 100);
-  };
+  // Use shared completion util on saved backend data (same as Dashboard and backend)
+  const completion = calculateProfileCompletion(savedProfile || {});
 
   if (loading) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -112,8 +119,6 @@ export default function Profile() {
     { id: 'achievements', label: 'Achievements', icon: <Award className="w-4 h-4" /> },
     { id: 'social', label: 'Social Links', icon: <LinkIcon className="w-4 h-4" /> },
   ];
-
-  const completion = calculateCompletion();
 
   const inputStyle: React.CSSProperties = {
     width: '100%', padding: '12px 16px',

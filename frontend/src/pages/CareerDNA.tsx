@@ -9,6 +9,7 @@ import { careerAPI, profileAPI } from '../services/api'
 import { getQuestionsForField, getFieldLabel, type DNAQuestion } from '../data/career-dna-questions'
 import { useAuthStore } from '../store/authStore'
 import { useTheme } from '../context/ThemeContext'
+import { calculateProfileCompletion } from '../utils/profileCompletion'
 
 // ── Processing messages ───────────────────────────────────────────────────────
 const PROCESSING_MSGS = [
@@ -233,15 +234,8 @@ const CareerDNA = () => {
           setFieldStudy(field)
           setQuestions(getQuestionsForField(field))
 
-          // Use backend completion value if present, else calculate same way as backend
-          let score = 0;
-          if (p?.name || p?.college) score += 30;
-          if (p?.skills && (Array.isArray(p.skills) ? p.skills.length > 0 : String(p.skills).trim().length > 0)) score += 20;
-          if (p?.linkedin_url || p?.github_url || p?.portfolio_url) score += 10;
-          if (p?.education && (Array.isArray(p.education) ? p.education.length > 0 : String(p.education).trim().length > 0)) score += 20;
-          if (p?.experience && (Array.isArray(p.experience) ? p.experience.length > 0 : String(p.experience).trim().length > 0)) score += 15;
-          if (p?.certifications && (Array.isArray(p.certifications) ? p.certifications.length > 0 : String(p.certifications).trim().length > 0)) score += 5;
-          const completion = Math.min(score, 100);
+          // Use shared completion util — same as Dashboard and Profile page
+          const completion = calculateProfileCompletion(p);
 
           if (completion < 80) {
             setAccessGranted(false);
