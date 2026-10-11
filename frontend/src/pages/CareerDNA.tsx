@@ -232,16 +232,18 @@ const CareerDNA = () => {
           
           setFieldStudy(field)
           setQuestions(getQuestionsForField(field))
-          // Assuming we can derive >80% if certain fields exist:
+
+          // Use backend completion value if present, else calculate same way as backend
           let score = 0;
-          if (p?.full_name) score += 20;
-          if (p?.email) score += 10;
-          if (p?.phone) score += 10;
-          if (p?.field_of_study) score += 20;
-          if (p?.education?.length > 0) score += 20;
-          if (p?.skills?.length > 0) score += 20;
-          
-          if (score < 80) {
+          if (p?.name || p?.college) score += 30;
+          if (p?.skills && (Array.isArray(p.skills) ? p.skills.length > 0 : String(p.skills).trim().length > 0)) score += 20;
+          if (p?.linkedin_url || p?.github_url || p?.portfolio_url) score += 10;
+          if (p?.education && (Array.isArray(p.education) ? p.education.length > 0 : String(p.education).trim().length > 0)) score += 20;
+          if (p?.experience && (Array.isArray(p.experience) ? p.experience.length > 0 : String(p.experience).trim().length > 0)) score += 15;
+          if (p?.certifications && (Array.isArray(p.certifications) ? p.certifications.length > 0 : String(p.certifications).trim().length > 0)) score += 5;
+          const completion = Math.min(score, 100);
+
+          if (completion < 80) {
             setAccessGranted(false);
           } else {
             setAccessGranted(true);
