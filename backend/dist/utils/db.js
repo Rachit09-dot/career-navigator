@@ -9,24 +9,36 @@ const dotenv_1 = __importDefault(require("dotenv"));
 const db_sqlite_1 = require("./db-sqlite");
 dotenv_1.default.config();
 const supabaseUrl = process.env.SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_KEY ||
+    '';
 const isValidSupabaseUrl = supabaseUrl.startsWith('https://') &&
     supabaseUrl.includes('.supabase.co') &&
-    !supabaseUrl.includes('xxmhlvkqhlmcxqeyvzld') &&
     !supabaseUrl.includes('example') &&
     !supabaseUrl.includes('your-project');
+const useSqlite = process.env.USE_SQLITE === 'true';
 let realSupabase = null;
-if (isValidSupabaseUrl && supabaseKey) {
+if (!useSqlite && isValidSupabaseUrl && supabaseKey) {
     try {
         realSupabase = (0, supabase_js_1.createClient)(supabaseUrl, supabaseKey);
         console.log('✅ Supabase client initialized:', supabaseUrl);
     }
     catch (e) {
-        console.warn('⚠️ Supabase init error, falling back to SQLite');
+        console.warn('⚠️ Supabase init error, falling back to SQLite:', e?.message || e);
     }
 }
 else {
-    console.warn('⚠️ Supabase URL missing or invalid. Using SQLite fallback.');
+    if (useSqlite) {
+        console.log('ℹ️ USE_SQLITE is enabled. Using SQLite database.');
+    }
+    else if (process.env.NODE_ENV === 'production') {
+        console.warn('⚠️ [PRODUCTION DATABASE WARNING] Supabase credentials (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY) are missing or invalid.');
+        console.warn('⚠️ The application is currently running with the local SQLite fallback. On platforms with ephemeral filesystems (e.g., Render free tier), SQLite data is wiped across restarts.');
+    }
+    else {
+        console.log('ℹ️ Running with local SQLite fallback database for development.');
+    }
 }
 class SQLiteQueryBuilder {
     constructor(table) {
@@ -63,6 +75,9 @@ class SQLiteQueryBuilder {
         return this;
     }
     eq(col, val) {
+        if (val === undefined) {
+            throw new Error(`[QueryBuilder] Filter condition '${col}' cannot be undefined`);
+        }
         this.whereConditions.push({ col, val });
         return this;
     }
@@ -128,7 +143,24 @@ class SQLiteQueryBuilder {
                 return { data: Array.isArray(this.insertData) ? rows : [inserted], error: null };
             }
             if (this.operation === 'update') {
-                const keys = Object.keys(this.updateData);
+                const keys = Object.keys(this.updateData || {}).filter(k => this.updateData[k] !== undefined);
+                // If no fields to update, return the existing row
+                if (keys.length === 0) {
+                    let sql = `SELECT * FROM ${this.tableName}`;
+                    const params = [];
+                    if (this.whereConditions.length > 0) {
+                        const clauses = this.whereConditions.map((cond, i) => {
+                            params.push(cond.val);
+                            return `${cond.col} = $${i + 1}`;
+                        });
+                        sql += ` WHERE ${clauses.join(' AND ')}`;
+                    }
+                    const res = await (0, db_sqlite_1.query)(sql, params);
+                    const rows = (res.rows || []).map(parseJSONFields);
+                    if (this.isSingle || this.isMaybeSingle)
+                        return { data: rows[0] || null, error: null };
+                    return { data: rows, error: null };
+                }
                 const setClauses = [];
                 const params = [];
                 keys.forEach(k => {
@@ -138,13 +170,27 @@ class SQLiteQueryBuilder {
                 let sql = `UPDATE ${this.tableName} SET ${setClauses.join(', ')}`;
                 if (this.whereConditions.length > 0) {
                     const whereClauses = this.whereConditions.map(cond => {
+                        if (cond.val === undefined) {
+                            throw new Error(`[QueryBuilder] Filter condition '${cond.col}' cannot be undefined`);
+                        }
                         params.push(cond.val);
                         return `${cond.col} = $${params.length}`;
                     });
                     sql += ` WHERE ${whereClauses.join(' AND ')}`;
                 }
-                sql += ` RETURNING *`;
-                const res = await (0, db_sqlite_1.query)(sql, params);
+                // Run UPDATE without RETURNING (avoids fragile RETURNING parsing in SQLite)
+                await (0, db_sqlite_1.query)(sql, params);
+                // Then SELECT the updated row using WHERE conditions
+                const selectParams = [];
+                let selectSql = `SELECT * FROM ${this.tableName}`;
+                if (this.whereConditions.length > 0) {
+                    const selectWhere = this.whereConditions.map((cond, i) => {
+                        selectParams.push(cond.val);
+                        return `${cond.col} = $${i + 1}`;
+                    });
+                    selectSql += ` WHERE ${selectWhere.join(' AND ')}`;
+                }
+                const res = await (0, db_sqlite_1.query)(selectSql, selectParams);
                 const rows = (res.rows || []).map(parseJSONFields);
                 if (this.isSingle || this.isMaybeSingle)
                     return { data: rows[0] || null, error: null };
@@ -155,6 +201,9 @@ class SQLiteQueryBuilder {
                 const params = [];
                 if (this.whereConditions.length > 0) {
                     const clauses = this.whereConditions.map(cond => {
+                        if (cond.val === undefined) {
+                            throw new Error(`[QueryBuilder] Filter condition '${cond.col}' cannot be undefined`);
+                        }
                         params.push(cond.val);
                         return `${cond.col} = $${params.length}`;
                     });
