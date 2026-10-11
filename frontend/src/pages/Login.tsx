@@ -38,12 +38,8 @@ export default function Login() {
     try {
       const response = await api.post('/auth/login', formData);
       login(response.data.user, response.data.token);
-      // Only go to onboarding if profile is genuinely incomplete (new user)
-      if (!response.data.user?.profileComplete) {
-        navigate('/onboarding');
-      } else {
-        navigate('/dashboard');
-      }
+      // Always go to dashboard — onboarding is optional, not forced
+      navigate('/dashboard');
     } catch (error: any) {
       alert(error.response?.data?.message || 'Login failed. Please check your credentials.');
     } finally {
