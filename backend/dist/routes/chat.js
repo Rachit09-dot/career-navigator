@@ -5,42 +5,157 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const generative_ai_1 = require("@google/generative-ai");
+const db_1 = require("../utils/db");
 const router = express_1.default.Router();
-function getGemini() {
-    return new generative_ai_1.GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+// ── Gemini client (lazy — avoids crash at startup if key missing) ─────────────
+function getGeminiModel() {
+    const key = (process.env.GEMINI_API_KEY || '').trim();
+    if (!key) {
+        throw new Error('GEMINI_API_KEY is not configured. Add it in Render → Environment.');
+    }
+    const genAI = new generative_ai_1.GoogleGenerativeAI(key);
+    return genAI.getGenerativeModel({
+        model: 'gemini-2.0-flash',
+        systemInstruction: `You are CareerNavigator AI — a friendly, knowledgeable career counsellor for students and freshers in India.
+
+CORE CAPABILITIES:
+• Career guidance: Data Analyst, Data Scientist, AI/ML Engineer, Software Developer, Full-Stack Developer, Product Manager, DevOps, Cybersecurity, and other tech & non-tech paths
+• Resume & ATS: review structure, bullet points, keyword optimisation, formatting
+• Job & internship prep: how to apply, what recruiters look for, platforms (LinkedIn, Naukri, Internshala, etc.)
+• Interview preparation: DSA questions, system design, HR rounds, behavioural questions with STAR framework
+• Skills & roadmaps: what to learn, in what order, free vs paid resources
+• Skill gap analysis: what skills are missing for a target role
+• Personalised advice: when the user's profile is provided, use it — do NOT invent information
+
+RESPONSE RULES:
+1. Answer the EXACT question asked — do not pivot to generic career advice unless the question is generic.
+2. Use the user's profile data (skills, education, experience, career goal) when provided in context.
+3. If profile info is missing, answer the general question first. Ask for more info only when it genuinely helps.
+4. Give structured answers: use bullet points, numbered steps, and code blocks where appropriate.
+5. For interview questions, provide realistic sample answers. Never invent the user's experience.
+6. For job listings, do not fabricate openings, salaries, deadlines, or links.
+7. Be concise but complete. Avoid filler phrases like "Great question!".
+8. If the Gemini API cannot help with something, say so honestly.`,
+    });
 }
+// ── Fetch user profile for context (best-effort) ─────────────────────────────
+async function getUserContext(userId) {
+    try {
+        const { data: profile } = await db_1.supabase
+            .from('profiles')
+            .select('skills, education, experience, career_goal, college, degree, field_of_study, certifications')
+            .eq('user_id', userId)
+            .maybeSingle();
+        const { data: user } = await db_1.supabase
+            .from('users')
+            .select('name')
+            .eq('id', userId)
+            .maybeSingle();
+        if (!profile && !user)
+            return '';
+        const parts = ['[User Profile]'];
+        if (user?.name)
+            parts.push(`Name: ${user.name}`);
+        if (profile?.college)
+            parts.push(`College: ${profile.college}`);
+        if (profile?.degree)
+            parts.push(`Degree: ${profile.degree}`);
+        if (profile?.field_of_study)
+            parts.push(`Field: ${profile.field_of_study}`);
+        if (profile?.career_goal)
+            parts.push(`Career Goal: ${profile.career_goal}`);
+        if (profile?.skills) {
+            const skillStr = Array.isArray(profile.skills) ? profile.skills.join(', ') : profile.skills;
+            if (skillStr.trim())
+                parts.push(`Skills: ${skillStr}`);
+        }
+        if (profile?.experience)
+            parts.push(`Experience: ${String(profile.experience).slice(0, 300)}`);
+        if (profile?.education)
+            parts.push(`Education: ${String(profile.education).slice(0, 200)}`);
+        if (profile?.certifications)
+            parts.push(`Certifications: ${String(profile.certifications).slice(0, 200)}`);
+        return parts.length > 1 ? parts.join('\n') : '';
+    }
+    catch {
+        return ''; // profile fetch failure must never block the chat
+    }
+}
+// ── POST /api/chat ─────────────────────────────────────────────────────────────
+// Auth is optional — unauthenticated users get the chatbot without profile context
 router.post('/', async (req, res) => {
     try {
         const { messages } = req.body;
-        if (!messages || !Array.isArray(messages)) {
-            return res.status(400).json({ message: 'Messages array is required' });
+        if (!messages || !Array.isArray(messages) || messages.length === 0) {
+            return res.status(400).json({ message: 'messages array is required and must not be empty' });
         }
-        const genAI = getGemini();
-        const model = genAI.getGenerativeModel({
-            model: 'gemini-flash-latest',
-            systemInstruction: "You are the friendly and helpful AI Career Assistant for the CareerNavigator website. Your goal is to guide students in India towards the right career paths, help them understand features like Career DNA and Skill Gap analysis on the platform, and answer any career-related questions they might have. Keep your answers concise, encouraging, and highly relevant."
-        });
-        // Format history for Gemini - ensure it starts with a user message
+        const latestMessage = messages[messages.length - 1];
+        if (!latestMessage?.content?.trim()) {
+            return res.status(400).json({ message: 'Last message content must not be empty' });
+        }
+        // Get model — throws a clear error if key is missing
+        let model;
+        try {
+            model = getGeminiModel();
+        }
+        catch (configErr) {
+            console.error('[chat] Config error:', configErr.message);
+            return res.status(503).json({ message: configErr.message });
+        }
+        // Build history (all messages except the last one)
+        // Gemini requires history to start with a 'user' turn
         const previousMessages = messages.slice(0, -1);
-        const firstUserIndex = previousMessages.findIndex((msg) => msg.role === 'user');
-        let chatHistory = [];
-        if (firstUserIndex !== -1) {
-            chatHistory = previousMessages.slice(firstUserIndex).map((msg) => ({
-                role: msg.role === 'user' ? 'user' : 'model',
-                parts: [{ text: msg.content }]
+        const firstUserIdx = previousMessages.findIndex((m) => m.role === 'user');
+        const chatHistory = firstUserIdx === -1
+            ? []
+            : previousMessages.slice(firstUserIdx).map((m) => ({
+                role: m.role === 'user' ? 'user' : 'model',
+                parts: [{ text: String(m.content) }],
             }));
+        // Optionally prepend profile context to the user's latest message
+        let userText = latestMessage.content.trim();
+        // Try to get auth from token if present (soft auth — don't block on failure)
+        let profileContext = '';
+        const authHeader = req.headers.authorization;
+        if (authHeader?.startsWith('Bearer ')) {
+            try {
+                const jwt = await import('jsonwebtoken');
+                const secret = process.env.JWT_SECRET || 'careernavigator_secret_key_2024';
+                const decoded = jwt.default.verify(authHeader.slice(7), secret);
+                if (decoded?.userId) {
+                    profileContext = await getUserContext(decoded.userId);
+                }
+            }
+            catch { /* token invalid or expired — skip profile context */ }
         }
-        const latestMessage = messages[messages.length - 1].content;
-        const chat = model.startChat({
-            history: chatHistory,
-        });
-        const result = await chat.sendMessage(latestMessage);
-        const responseText = result.response.text();
-        res.json({ reply: responseText });
+        if (profileContext) {
+            userText = `${profileContext}\n\n[User Question]\n${userText}`;
+        }
+        // Send to Gemini
+        const chat = model.startChat({ history: chatHistory });
+        const result = await chat.sendMessage(userText);
+        const reply = result.response.text();
+        if (!reply?.trim()) {
+            return res.status(502).json({ message: 'Gemini returned an empty response. Please try again.' });
+        }
+        res.json({ reply });
     }
     catch (error) {
-        console.error('Chat endpoint error:', error);
-        res.status(500).json({ message: 'Failed to process chat' });
+        const msg = error?.message || '';
+        if (msg.includes('API_KEY_INVALID') || msg.includes('API key not valid')) {
+            console.error('[chat] Invalid Gemini API key');
+            return res.status(503).json({
+                message: 'Chatbot is misconfigured: Gemini API key is invalid. Please contact support.'
+            });
+        }
+        if (msg.includes('QUOTA_EXCEEDED') || msg.includes('429')) {
+            return res.status(429).json({ message: 'Chatbot is temporarily unavailable due to API quota. Please try again later.' });
+        }
+        if (msg.includes('PERMISSION_DENIED') || msg.includes('403')) {
+            return res.status(503).json({ message: 'Chatbot access denied. API key may not have Gemini access.' });
+        }
+        console.error('[chat] Unexpected error:', msg, error?.status, error?.errorDetails);
+        res.status(500).json({ message: 'Failed to get a response. Please try again.' });
     }
 });
 exports.default = router;

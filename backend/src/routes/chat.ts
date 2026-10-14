@@ -13,7 +13,7 @@ function getGeminiModel() {
   }
   const genAI = new GoogleGenerativeAI(key)
   return genAI.getGenerativeModel({
-    model: 'gemini-1.5-flash',
+    model: 'gemini-2.0-flash',
     systemInstruction: `You are CareerNavigator AI — a friendly, knowledgeable career counsellor for students and freshers in India.
 
 CORE CAPABILITIES:
@@ -155,7 +155,7 @@ router.post('/', async (req: AuthRequest, res) => {
       return res.status(503).json({ message: 'Chatbot access denied. API key may not have Gemini access.' })
     }
 
-    console.error('[chat] Unexpected error:', msg)
+    console.error('[chat] Unexpected error:', msg, error?.status, error?.errorDetails)
     res.status(500).json({ message: 'Failed to get a response. Please try again.' })
   }
 })
