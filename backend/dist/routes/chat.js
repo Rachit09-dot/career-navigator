@@ -8,14 +8,15 @@ const generative_ai_1 = require("@google/generative-ai");
 const db_1 = require("../utils/db");
 const router = express_1.default.Router();
 // ── Gemini client (lazy — avoids crash at startup if key missing) ─────────────
-function getGeminiModel() {
+const MODELS = ['gemini-2.5-flash', 'gemini-3.8-flash', 'gemini-2.0-flash-lite'];
+function getGeminiModel(modelName) {
     const key = (process.env.GEMINI_API_KEY || '').trim();
     if (!key) {
         throw new Error('GEMINI_API_KEY is not configured. Add it in Render → Environment.');
     }
     const genAI = new generative_ai_1.GoogleGenerativeAI(key);
     return genAI.getGenerativeModel({
-        model: 'gemini-3.8-flash',
+        model: modelName,
         systemInstruction: `You are CareerNavigator AI — a friendly, knowledgeable career counsellor for students and freshers in India.
 
 CORE CAPABILITIES:
@@ -93,16 +94,7 @@ router.post('/', async (req, res) => {
         if (!latestMessage?.content?.trim()) {
             return res.status(400).json({ message: 'Last message content must not be empty' });
         }
-        // Get model — throws a clear error if key is missing
-        let model;
-        try {
-            model = getGeminiModel();
-        }
-        catch (configErr) {
-            console.error('[chat] Config error:', configErr.message);
-            return res.status(503).json({ message: configErr.message });
-        }
-        // Build history (all messages except the last one)
+        // Build chat history (all except last message)
         // Gemini requires history to start with a 'user' turn
         const previousMessages = messages.slice(0, -1);
         const firstUserIdx = previousMessages.findIndex((m) => m.role === 'user');
@@ -112,10 +104,8 @@ router.post('/', async (req, res) => {
                 role: m.role === 'user' ? 'user' : 'model',
                 parts: [{ text: String(m.content) }],
             }));
-        // Optionally prepend profile context to the user's latest message
+        // Prepend profile context if user is authenticated
         let userText = latestMessage.content.trim();
-        // Try to get auth from token if present (soft auth — don't block on failure)
-        let profileContext = '';
         const authHeader = req.headers.authorization;
         if (authHeader?.startsWith('Bearer ')) {
             try {
@@ -123,20 +113,40 @@ router.post('/', async (req, res) => {
                 const secret = process.env.JWT_SECRET || 'careernavigator_secret_key_2024';
                 const decoded = jwt.default.verify(authHeader.slice(7), secret);
                 if (decoded?.userId) {
-                    profileContext = await getUserContext(decoded.userId);
+                    const profileContext = await getUserContext(decoded.userId);
+                    if (profileContext)
+                        userText = `${profileContext}\n\n[User Question]\n${userText}`;
                 }
             }
-            catch { /* token invalid or expired — skip profile context */ }
+            catch { /* skip profile context on auth failure */ }
         }
-        if (profileContext) {
-            userText = `${profileContext}\n\n[User Question]\n${userText}`;
+        // Get model — throws a clear error if key is missing
+        let reply = '';
+        let lastError = null;
+        for (const modelName of MODELS) {
+            try {
+                const model = getGeminiModel(modelName);
+                const chat = model.startChat({ history: chatHistory });
+                const result = await chat.sendMessage(userText);
+                reply = result.response.text();
+                if (reply?.trim())
+                    break; // success — stop trying
+            }
+            catch (err) {
+                lastError = err;
+                const msg = err?.message || '';
+                // Only retry on 503 overload or 404 model-not-found
+                if (msg.includes('503') || msg.includes('404') || msg.includes('not found') || msg.includes('no longer available')) {
+                    console.warn(`[chat] Model ${modelName} unavailable, trying next...`);
+                    continue;
+                }
+                throw err; // non-retryable error — bubble up
+            }
         }
-        // Send to Gemini
-        const chat = model.startChat({ history: chatHistory });
-        const result = await chat.sendMessage(userText);
-        const reply = result.response.text();
         if (!reply?.trim()) {
-            return res.status(502).json({ message: 'Gemini returned an empty response. Please try again.' });
+            if (lastError)
+                throw lastError;
+            return res.status(502).json({ message: 'AI service is temporarily unavailable. Please try again in a moment.' });
         }
         res.json({ reply });
     }
