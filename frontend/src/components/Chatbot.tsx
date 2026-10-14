@@ -1,12 +1,83 @@
 import { useState, useRef, useEffect } from 'react';
-import { MessageCircle, X, Send, Bot, User } from 'lucide-react';
+import { MessageCircle, X, Send, Bot, User, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import axios from 'axios';
+import api from '../services/api';
 import { useTheme } from '../context/ThemeContext'
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
+}
+
+// Simple markdown renderer: bold, inline code, code blocks, bullets
+function RenderMarkdown({ text }: { text: string }) {
+  const lines = text.split('\n')
+  const elements: JSX.Element[] = []
+  let i = 0
+
+  while (i < lines.length) {
+    const line = lines[i]
+
+    // Code block
+    if (line.trim().startsWith('```')) {
+      const lang = line.trim().slice(3)
+      const codeLines: string[] = []
+      i++
+      while (i < lines.length && !lines[i].trim().startsWith('```')) {
+        codeLines.push(lines[i])
+        i++
+      }
+      elements.push(
+        <pre key={i} style={{ background: 'rgba(0,0,0,0.08)', borderRadius: 6, padding: '8px 10px', fontSize: 11, overflowX: 'auto', margin: '4px 0', fontFamily: 'monospace' }}>
+          <code>{codeLines.join('\n')}</code>
+        </pre>
+      )
+      i++
+      continue
+    }
+
+    // Heading
+    if (line.startsWith('### ')) {
+      elements.push(<p key={i} style={{ fontWeight: 700, fontSize: 12, margin: '6px 0 2px' }}>{line.slice(4)}</p>)
+    } else if (line.startsWith('## ')) {
+      elements.push(<p key={i} style={{ fontWeight: 700, fontSize: 13, margin: '6px 0 2px' }}>{line.slice(3)}</p>)
+    } else if (line.startsWith('# ')) {
+      elements.push(<p key={i} style={{ fontWeight: 700, fontSize: 14, margin: '6px 0 2px' }}>{line.slice(2)}</p>)
+    } else if (line.match(/^[-*•] /)) {
+      // Bullet
+      elements.push(
+        <div key={i} style={{ display: 'flex', gap: 6, margin: '1px 0' }}>
+          <span style={{ flexShrink: 0, marginTop: 1 }}>•</span>
+          <span>{inlineFormat(line.replace(/^[-*•] /, ''))}</span>
+        </div>
+      )
+    } else if (line.match(/^\d+\. /)) {
+      const num = line.match(/^(\d+)\. /)?.[1]
+      elements.push(
+        <div key={i} style={{ display: 'flex', gap: 6, margin: '1px 0' }}>
+          <span style={{ flexShrink: 0, fontWeight: 600, minWidth: 16 }}>{num}.</span>
+          <span>{inlineFormat(line.replace(/^\d+\. /, ''))}</span>
+        </div>
+      )
+    } else if (line.trim() === '') {
+      elements.push(<div key={i} style={{ height: 4 }} />)
+    } else {
+      elements.push(<p key={i} style={{ margin: '1px 0', lineHeight: 1.5 }}>{inlineFormat(line)}</p>)
+    }
+    i++
+  }
+  return <div style={{ fontSize: 12.5 }}>{elements}</div>
+}
+
+function inlineFormat(text: string): React.ReactNode {
+  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g)
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**'))
+      return <strong key={i}>{part.slice(2, -2)}</strong>
+    if (part.startsWith('`') && part.endsWith('`'))
+      return <code key={i} style={{ background: 'rgba(0,0,0,0.1)', padding: '0 3px', borderRadius: 3, fontFamily: 'monospace', fontSize: 11 }}>{part.slice(1, -1)}</code>
+    return part
+  })
 }
 
 export default function Chatbot() {
@@ -35,20 +106,13 @@ export default function Chatbot() {
     setIsLoading(true);
 
     try {
-      // Map API URL - depending on environment
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-      
-      const response = await axios.post(`${API_URL}/chat`, {
-        messages: newMessages.map(m => ({
-          role: m.role,
-          content: m.content
-        }))
+      const response = await api.post('/chat', {
+        messages: newMessages.map(m => ({ role: m.role, content: m.content }))
       });
-
       setMessages([...newMessages, { role: 'assistant', content: response.data.reply }]);
-    } catch (error) {
-      console.error('Chatbot error:', error);
-      setMessages([...newMessages, { role: 'assistant', content: 'Oops! Something went wrong. Please try again later.' }]);
+    } catch (error: any) {
+      const msg = error.response?.data?.message || 'Something went wrong. Please try again.';
+      setMessages([...newMessages, { role: 'assistant', content: `⚠️ ${msg}` }]);
     } finally {
       setIsLoading(false);
     }
@@ -111,7 +175,9 @@ export default function Chatbot() {
                       ? 'bg-indigo-600 text-white rounded-tr-sm' 
                       : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 border border-gray-100 dark:border-gray-700 rounded-tl-sm'
                   }`}>
-                    {msg.content}
+                    {msg.role === 'assistant'
+                      ? <RenderMarkdown text={msg.content} />
+                      : msg.content}
                   </div>
                 </motion.div>
               ))}
