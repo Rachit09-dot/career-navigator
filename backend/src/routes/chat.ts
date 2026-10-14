@@ -13,7 +13,7 @@ function getGeminiModel() {
   }
   const genAI = new GoogleGenerativeAI(key)
   return genAI.getGenerativeModel({
-    model: 'gemini-2.0-flash',
+    model: 'gemini-3.8-flash',
     systemInstruction: `You are CareerNavigator AI — a friendly, knowledgeable career counsellor for students and freshers in India.
 
 CORE CAPABILITIES:
