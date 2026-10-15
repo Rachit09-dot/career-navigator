@@ -8,7 +8,7 @@ const generative_ai_1 = require("@google/generative-ai");
 const db_1 = require("../utils/db");
 const router = express_1.default.Router();
 // ── Gemini client (lazy — avoids crash at startup if key missing) ─────────────
-const MODELS = ['gemini-2.5-flash', 'gemini-3.8-flash', 'gemini-2.0-flash-lite'];
+const MODELS = ['gemini-3.8-flash', 'gemini-3.8-flash', 'gemini-2.0-flash-lite'];
 function getGeminiModel(modelName) {
     const key = (process.env.GEMINI_API_KEY || '').trim();
     if (!key) {

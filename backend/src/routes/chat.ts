@@ -6,7 +6,7 @@ import { supabase } from '../utils/db'
 const router = express.Router()
 
 // ── Gemini client (lazy — avoids crash at startup if key missing) ─────────────
-const MODELS = ['gemini-2.5-flash', 'gemini-3.8-flash', 'gemini-2.0-flash-lite']
+const MODELS = ['gemini-3.8-flash', 'gemini-3.8-flash', 'gemini-2.0-flash-lite']
 
 function getGeminiModel(modelName: string) {
   const key = (process.env.GEMINI_API_KEY || '').trim()
@@ -167,3 +167,4 @@ router.post('/', async (req: AuthRequest, res) => {
 })
 
 export default router
+

@@ -16,7 +16,7 @@ router.post('/analyze', auth_1.authMiddleware, async (req, res) => {
         let gaps;
         try {
             const genAI = new generative_ai_1.GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-            const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+            const model = genAI.getGenerativeModel({ model: 'gemini-3.8-flash' });
             const prompt = `You are a career advisor for Indian students. Analyze skill gap for this person.
 
 Target Role: ${target_role}
@@ -138,7 +138,7 @@ router.post('/generate-test', auth_1.authMiddleware, async (req, res) => {
         if (!target_role)
             return res.status(400).json({ message: 'Target role is required' });
         const genAI = new generative_ai_1.GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+        const model = genAI.getGenerativeModel({ model: 'gemini-3.8-flash' });
         const prompt = `You are a technical interviewer and career evaluator. Create a 10-question multiple-choice test to evaluate a candidate's readiness for the role of "${target_role}".
 
 CRITICAL RULES:

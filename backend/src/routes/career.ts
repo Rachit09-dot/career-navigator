@@ -37,7 +37,7 @@ router.post('/assessment', authMiddleware, async (req: AuthRequest, res) => {
 
     try {
       const genAI = getGemini()
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
+      const model = genAI.getGenerativeModel({ model: 'gemini-3.8-flash' })
 
       const fieldContext = answers.stream || answers.field || answers._field_of_study || 'General'
       const prompt = `You are a career counselor AI for Indian students. Based on these answers, suggest top 3 career paths.
@@ -212,4 +212,5 @@ function getSkills(career: string) {
 }
 
 export default router
+
 

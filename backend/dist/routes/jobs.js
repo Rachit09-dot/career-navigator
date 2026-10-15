@@ -29,7 +29,7 @@ async function fetchJSearchJobs(query, location = 'India') {
             'X-RapidAPI-Host': 'jsearch.p.rapidapi.com',
         },
     });
-    if (res.status === 403) {
+    if (res.status === 403 || res.status === 404) {
         // 403 = not subscribed to this RapidAPI plan — skip silently, use Adzuna
         throw Object.assign(new Error(`JSearch HTTP 403 — not subscribed`), { skipRetry: true });
     }

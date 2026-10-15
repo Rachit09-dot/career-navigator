@@ -14,7 +14,7 @@ router.post('/analyze', authMiddleware, async (req: AuthRequest, res) => {
 
     try {
       const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
+      const model = genAI.getGenerativeModel({ model: 'gemini-3.8-flash' })
 
       const prompt = `You are a career advisor for Indian students. Analyze skill gap for this person.
 
@@ -141,7 +141,7 @@ router.post('/generate-test', authMiddleware, async (req: AuthRequest, res) => {
     if (!target_role) return res.status(400).json({ message: 'Target role is required' })
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
+    const model = genAI.getGenerativeModel({ model: 'gemini-3.8-flash' })
 
     const prompt = `You are a technical interviewer and career evaluator. Create a 10-question multiple-choice test to evaluate a candidate's readiness for the role of "${target_role}".
 
@@ -526,4 +526,5 @@ function getFallbackGaps(role: string) {
 }
 
 export default router
+
 

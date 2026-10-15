@@ -16,7 +16,7 @@ router.post('/ai-bullets', auth_1.authMiddleware, async (req, res) => {
         let bullets;
         try {
             const genAI = new generative_ai_1.GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-            const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+            const model = genAI.getGenerativeModel({ model: 'gemini-3.8-flash' });
             const prompt = `Generate 4 strong resume bullet points for this role.
 
 Role: ${role}

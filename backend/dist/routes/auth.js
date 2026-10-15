@@ -36,8 +36,8 @@ router.post('/register', async (req, res) => {
             .insert({ name, email, password: hashedPassword })
             .select('id, name, email')
             .single();
-        if (error || !user) {
-            console.error('Create user error:', error);
+        if (error || !user || !user.id) {
+            console.error('Create user error:', error || 'User ID was not generated');
             const errStr = String(error?.message || error || '').toLowerCase();
             if (errStr.includes('unique') || errStr.includes('duplicate') || errStr.includes('already exists')) {
                 return res.status(400).json({ message: 'User already exists' });
