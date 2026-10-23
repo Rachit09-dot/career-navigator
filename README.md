@@ -1,208 +1,132 @@
-# CareerNavigator — AI-Powered Career Platform
+# 🚀 Career Navigator
 
-A full-stack career guidance platform built for Indian students and freshers. Helps with career discovery, skill development, job search, interview preparation, and resume building.
+An AI-powered career development platform built with React, Express, and Google Gemini AI.
 
-**Live Demo:** https://career-navigator-murex.vercel.app/
+## ✨ Features
 
----
+- **Career DNA** – AI personality-based career analysis
+- **Skill Gap Analyzer** – Compare your skills vs. a target role
+- **Job Board** – Browse and track job applications
+- **Resume Builder** – Build and export professional resumes (3 templates)
+- **Mock Interviews** – AI-graded practice sessions
+- **MCQ Skill Tests** – Role-specific multiple choice quizzes
+- **Learning Roadmaps** – AI-generated step-by-step learning paths
+- **Tools Suite** – GitHub analyzer, cover letter generator, and more
+- **Gamification** – XP, badges, and streaks to keep you motivated
+- **AI Chatbot** – Career guidance assistant
 
-## Features
+## 🛠️ Tech Stack
 
-| Feature | Description |
+| Layer | Stack |
 |---|---|
-| Career DNA | AI assessment mapping personality to career paths (18+ fields) |
-| Skill Gap Analysis | Role-specific skill gap with learning resources |
-| Mock Interview | AI evaluates answers, gives feedback + final report |
-| MCQ Tests | Role-based tests with timer, flag, explanations |
-| Learning Roadmap | Personalized milestone-based roadmap with progress tracking |
-| Resume Builder | Live editor with 3 templates (Classic/Modern/Minimal), PDF export, DB save |
-| ATS Scanner | Resume vs job description match score |
-| Salary Intelligence | AI-estimated salary ranges for Indian market |
-| Company Prep | Interview prep material for any company + role |
-| Outreach Generator | Draft professional LinkedIn/email messages |
-| GitHub Analyzer | Public repo metadata analysis and portfolio improvement |
-| Job Tracker | Track applications with status updates |
-| Gamification | XP system, badges, leaderboard, notifications |
-| AI Chatbot | Career Q&A with profile context |
+| Frontend | React 18, TypeScript, Vite, Tailwind CSS, Zustand, Framer Motion |
+| Backend | Node.js, Express 4, TypeScript |
+| AI | Google Gemini 2.0 Flash |
+| Database | Supabase (PostgreSQL) / SQLite fallback |
+| Auth | JWT (bcryptjs) |
 
 ---
 
-## Tech Stack
+## 🚀 Deployment
 
-**Frontend:** React 18 + TypeScript, Vite, Tailwind CSS, Framer Motion, Zustand, React Router v6
+### Backend → Render
 
-**Backend:** Node.js, Express, TypeScript
+1. Go to [render.com](https://render.com) → New → Web Service
+2. Connect this GitHub repo
+3. Set **Root Directory** to `backend`
+4. **Build Command:** `npm install && npm run build`
+5. **Start Command:** `npm start`
+6. Add these **Environment Variables** in the Render dashboard:
 
-**AI:** Google Gemini 1.5 Flash (via `@google/generative-ai`)
+| Variable | Required | Where to get |
+|---|---|---|
+| `JWT_SECRET` | ✅ | Generate: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
+| `GEMINI_API_KEY` | ✅ | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) |
+| `NODE_ENV` | ✅ | `production` |
+| `SUPABASE_URL` | Recommended | Supabase Dashboard → Project Settings → API |
+| `SUPABASE_SERVICE_ROLE_KEY` | Recommended | Supabase Dashboard → Project Settings → API |
+| `ADZUNA_APP_ID` / `ADZUNA_APP_KEY` | Optional | [developer.adzuna.com](https://developer.adzuna.com) |
+| `JSEARCH_API_KEY` | Optional | [rapidapi.com/jsearch](https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch) |
+| `GITHUB_TOKEN` | Optional | [github.com/settings/tokens](https://github.com/settings/tokens) |
 
-**Database:** Supabase (PostgreSQL) with automatic SQLite fallback for local dev
-
-**Deployment:** Frontend → Vercel | Backend → Railway / Render
+> ⚠️ **Without Supabase credentials**, the backend falls back to SQLite. On Render free tier the disk is ephemeral — **all data will be lost on redeploy**. Set up Supabase for persistent storage.
 
 ---
 
-## Local Setup
+### Frontend → Vercel
+
+1. Go to [vercel.com](https://vercel.com) → New Project → Import this GitHub repo
+2. Set **Root Directory** to `frontend`
+3. **Framework:** Vite (auto-detected)
+4. **Build Command:** `npm run build`
+5. **Output Directory:** `dist`
+6. Add this **Environment Variable** in Vercel dashboard:
+
+| Variable | Value |
+|---|---|
+| `VITE_API_URL` | `https://your-backend.onrender.com/api` |
+
+Replace `your-backend.onrender.com` with your actual Render backend URL.
+
+---
+
+## 💻 Local Development
 
 ### Prerequisites
 - Node.js 18+
-- npm or yarn
+- A Google Gemini API key (free at [aistudio.google.com](https://aistudio.google.com/apikey))
 
-### 1. Clone and install
-
-```bash
-git clone https://github.com/Rachit09-dot/career-navigator
-cd career-navigator
-
-# Install backend
-cd backend && npm install
-
-# Install frontend
-cd ../frontend && npm install
-```
-
-### 2. Configure backend environment
+### Backend
 
 ```bash
 cd backend
 cp .env.example .env
-```
-
-Edit `.env` — **minimum required:**
-
-```env
-JWT_SECRET=any-long-random-string
-GEMINI_API_KEY=your_key_from_aistudio.google.com
-```
-
-Everything else is optional. The app uses SQLite automatically if Supabase is not configured.
-
-### 3. Set up the database
-
-**Option A — SQLite (easiest, no setup needed):**
-The database file (`database.sqlite`) is created automatically on first run.
-
-**Option B — Supabase (production recommended):**
-1. Create a project at https://supabase.com
-2. Go to SQL Editor and run `backend/supabase-schema.sql`
-3. Add `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to your `.env`
-
-### 4. Configure frontend environment
-
-```bash
-cd frontend
-cp .env.example .env   # or create manually
-```
-
-```env
-VITE_API_URL=http://localhost:5000/api
-```
-
-### 5. Run development servers
-
-**Backend:**
-```bash
-cd backend
+# Edit .env and set at minimum: JWT_SECRET and GEMINI_API_KEY
+npm install
 npm run dev
-# Starts on http://localhost:5000
+# Runs on http://localhost:5000
 ```
 
-**Frontend** (new terminal):
+### Frontend
+
 ```bash
 cd frontend
+cp .env.example .env
+# .env already points to http://localhost:5000/api — no change needed for local dev
+npm install
 npm run dev
-# Starts on http://localhost:5173
+# Runs on http://localhost:3000
 ```
 
 ---
 
-## API Keys Reference
-
-| Variable | Required | Where to get |
-|---|---|---|
-| `JWT_SECRET` | ✅ Yes | Generate any random string |
-| `GEMINI_API_KEY` | ✅ Yes (for AI) | https://aistudio.google.com/apikey |
-| `SUPABASE_URL` | Optional | https://supabase.com/dashboard |
-| `SUPABASE_SERVICE_ROLE_KEY` | Optional | Supabase → Project Settings → API |
-| `ADZUNA_APP_ID` + `ADZUNA_APP_KEY` | Optional | https://developer.adzuna.com |
-| `JSEARCH_API_KEY` | Optional | https://rapidapi.com (JSearch) |
-| `GITHUB_TOKEN` | Optional | https://github.com/settings/tokens |
-
-Without job API keys, sample jobs are shown. Without Gemini, AI features use built-in fallback responses.
-
----
-
-## Database Schema
-
-All tables are in `backend/supabase-schema.sql`. Key tables:
-
-- `users` — authentication
-- `profiles` — extended profile info, skills, education
-- `career_assessments` — Career DNA + skill gap results
-- `interview_sessions` — mock interview Q&A + reports
-- `mcq_results` — test scores and answers
-- `roadmap_progress` — learning roadmap + milestone completion
-- `resumes` — saved resume data (JSON) per user
-- `applications` — job application tracker
-- `user_xp` + `xp_events` — gamification
-- `notifications` — in-app notifications
-
----
-
-## Production Deployment
-
-### Frontend (Vercel)
-
-```bash
-cd frontend
-npm run build
-# deploy dist/ to Vercel
-```
-
-Set environment variable in Vercel:
-```
-VITE_API_URL=https://your-backend-url.railway.app/api
-```
-
-### Backend (Railway / Render)
-
-Set all environment variables from `.env.example` in the platform dashboard.
-
-Build command: `npm run build`
-Start command: `npm start`
-
-> **Note:** Railway and Render free tiers have ephemeral filesystems — SQLite data is lost on restart. Use Supabase for persistent data in production.
-
----
-
-## Project Structure
+## 📁 Project Structure
 
 ```
 career-navigator/
-├── backend/
+├── backend/               # Express API server
 │   ├── src/
-│   │   ├── routes/          # All API route handlers
-│   │   ├── middleware/       # JWT auth middleware
-│   │   └── utils/           # DB client (Supabase + SQLite fallback)
-│   ├── supabase-schema.sql  # Full database schema
-│   └── .env.example
-└── frontend/
-    ├── src/
-    │   ├── pages/           # All page components
-    │   ├── components/      # Shared components (Navbar, Chatbot, etc.)
-    │   ├── services/        # Axios API client
-    │   ├── store/           # Zustand auth store
-    │   ├── context/         # Theme context
-    │   └── data/            # Career DNA questions, stream config
-    └── .env (create from example)
+│   │   ├── server.ts      # App entry point
+│   │   ├── middleware/    # Auth (JWT)
+│   │   ├── routes/        # 15 API route files
+│   │   └── utils/         # DB abstraction + Gemini client
+│   ├── railway.toml       # Railway deployment config
+│   └── Procfile           # Heroku/Render fallback
+│
+├── frontend/              # React SPA
+│   ├── src/
+│   │   ├── App.tsx        # Router + protected routes
+│   │   ├── pages/         # ~20 page components
+│   │   ├── components/    # Shared UI components
+│   │   ├── store/         # Zustand state
+│   │   └── services/      # API call helpers
+│   └── vercel.json        # SPA rewrite rule for Vercel
+│
+└── render.yaml            # Render deployment config
 ```
 
 ---
 
-## Phase 2 Changes (implemented)
+## 📄 License
 
-- Fixed Gemini model names (`gemini-1.5-flash` across all routes)
-- Resume Builder: 3 templates (Classic/Modern/Minimal), save/load from DB
-- Notifications system: backend route + in-app bell with badge/XP alerts
-- Navbar: notifications bell, "More" dropdown for extra links, mobile 2-column grid
-- Added `resumes` and `notifications` tables to both SQLite and Supabase schemas
-- XP awards now create in-app notifications on badge unlock and level-up
+MIT
