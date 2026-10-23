@@ -1,0 +1,94 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = __importDefault(require("express"));
+const cors_1 = __importDefault(require("cors"));
+const dotenv_1 = __importDefault(require("dotenv"));
+const helmet_1 = __importDefault(require("helmet"));
+const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
+const auth_1 = __importDefault(require("./routes/auth"));
+const profile_1 = __importDefault(require("./routes/profile"));
+const career_1 = __importDefault(require("./routes/career"));
+const skillGap_1 = __importDefault(require("./routes/skillGap"));
+const jobs_1 = __importDefault(require("./routes/jobs"));
+const applications_1 = __importDefault(require("./routes/applications"));
+const resume_1 = __importDefault(require("./routes/resume"));
+const resumeData_1 = __importDefault(require("./routes/resumeData"));
+const chat_1 = __importDefault(require("./routes/chat"));
+const interview_1 = __importDefault(require("./routes/interview"));
+const roadmap_1 = __importDefault(require("./routes/roadmap"));
+const tools_1 = __importDefault(require("./routes/tools"));
+const mcq_1 = __importDefault(require("./routes/mcq"));
+const gamification_1 = __importDefault(require("./routes/gamification"));
+const notifications_1 = __importDefault(require("./routes/notifications"));
+dotenv_1.default.config();
+const app = (0, express_1.default)();
+// ✅ FIX: ensure PORT is always a number
+const PORT = Number(process.env.PORT) || 5000;
+// Trust proxy for Render/Railway deployments (required for express-rate-limit)
+app.set('trust proxy', 1);
+// Security
+app.use((0, helmet_1.default)());
+// Rate limiters
+const globalLimiter = (0, express_rate_limit_1.default)({
+    windowMs: 15 * 60 * 1000,
+    max: 1000,
+    message: { message: 'Too many requests, please try again later.' },
+});
+const authLimiter = (0, express_rate_limit_1.default)({
+    windowMs: 60 * 1000,
+    max: 20,
+    message: { message: 'Too many auth attempts, please wait a minute.' },
+});
+app.use(globalLimiter);
+// CORS
+app.use((0, cors_1.default)({
+    origin: true,
+    credentials: true,
+}));
+app.use(express_1.default.json());
+app.use(express_1.default.urlencoded({ extended: true }));
+// Root route
+app.get('/', (_req, res) => {
+    res.send('Server is running 🚀');
+});
+// Routes
+app.use('/api/auth', authLimiter, auth_1.default);
+app.use('/api/profile', profile_1.default);
+app.use('/api/career', career_1.default);
+app.use('/api/skill-gap', skillGap_1.default);
+app.use('/api/jobs', jobs_1.default);
+app.use('/api/applications', applications_1.default);
+app.use('/api/resume', resume_1.default);
+app.use('/api/resume-data', resumeData_1.default);
+app.use('/api/chat', chat_1.default);
+app.use('/api/interview', interview_1.default);
+app.use('/api/roadmap', roadmap_1.default);
+app.use('/api/tools', tools_1.default);
+app.use('/api/mcq', mcq_1.default);
+app.use('/api/gamification', gamification_1.default);
+app.use('/api/notifications', notifications_1.default);
+// Health check
+app.get('/api/health', (_req, res) => {
+    res.json({
+        status: 'ok',
+        message: 'CareerNavigator API is running',
+        timestamp: new Date().toISOString()
+    });
+});
+// Error handling
+app.use((err, _req, res, _next) => {
+    console.error(err.stack);
+    res.status(err.status || 500).json({
+        message: err.message || 'Internal Server Error',
+        ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
+    });
+});
+// 🚀 START SERVER
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`🔒 Security: Helmet + Rate Limiting enabled`);
+});
+exports.default = app;
